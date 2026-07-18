@@ -34,6 +34,8 @@
   .chip:hover{border-color:var(--ciano);color:var(--azul2);}
   .chip.on{background:var(--azul2);border-color:var(--azul2);color:#fff;box-shadow:0 2px 8px rgba(0,80,200,.25);}
   .chip.todos.on{background:var(--ciano);border-color:var(--ciano);}
+  .chip.rede.on{background:var(--verde);border-color:var(--verde);}
+  .divisor{width:1px;height:24px;background:var(--borda);margin:0 4px;}
 
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:10px 0;}
   .card.oculto{display:none;}
@@ -109,6 +111,11 @@
   </div>
 
   <div class="tipos">
+    <span class="rotulo">Rede:</span>
+    <button class="chip rede on" data-rede="">Todos</button>
+    <button class="chip rede" data-rede="Própria">Própria</button>
+    <button class="chip rede" data-rede="Credenciada">Credenciada</button>
+    <span class="divisor"></span>
     <span class="rotulo">Tipo de atendimento:</span>
     <button class="chip todos on" id="chipTodos">Todos</button>
     <button class="chip" data-svc="1">Internação</button>
@@ -190,6 +197,15 @@ function norm(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
 
 function planosSelecionados(){ return fPl.value ? [fPl.value] : DATA.plans.map(p=>p.k); }
 
+// seleção de rede (Todos | Própria | Credenciada) — escolha única
+let redeSel = '';
+const chipsRede = [...document.querySelectorAll('.chip.rede')];
+chipsRede.forEach(c => c.addEventListener('click', ()=>{
+  redeSel = c.dataset.rede;
+  chipsRede.forEach(x => x.classList.toggle('on', x===c));
+  render();
+}));
+
 // seleção de tipos de atendimento (chips)
 let svcAtivos = 0; // 0 = todos
 const chips = [...document.querySelectorAll('.chip[data-svc]')];
@@ -221,6 +237,7 @@ function render(){
 
   const rows = DATA.rows.filter(r =>
     (!op || r.op===op) &&
+    (!redeSel || r.re===redeSel) &&
     (!uf || r.uf===uf) &&
     (!ci || r.ci===ci) &&
     (!busca || norm(r.no).includes(busca)) &&
@@ -258,6 +275,7 @@ fNo.addEventListener('input', render);
 $('btnLimpar').addEventListener('click', ()=>{
   fOp.value=''; fPl.value=''; fUf.value=''; fNo.value='';
   svcAtivos=0; syncChips();
+  redeSel=''; chipsRede.forEach(x => x.classList.toggle('on', x.dataset.rede===''));
   popularCidades(); fCi.value=''; render();
 });
 
