@@ -16,8 +16,7 @@
   header{background:linear-gradient(135deg,var(--azul) 0%,var(--azul2) 55%,var(--ciano) 100%);color:#fff;padding:22px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
   header h1{font-size:22px;font-weight:700;letter-spacing:.3px;}
   header .sub{font-size:13px;opacity:.85;margin-top:4px;}
-  header .logo{font-size:26px;font-weight:800;font-style:italic;letter-spacing:-.5px;}
-  header .logo span{color:var(--ciano2);}
+  header .logo img{height:38px;display:block;}
 
   .wrap{max-width:1400px;margin:0 auto;padding:20px 24px 60px;}
 
@@ -29,7 +28,15 @@
   .limpar button{width:100%;padding:10px 12px;border:1.5px solid var(--ciano);background:#fff;color:var(--azul2);font-weight:700;font-size:13px;border-radius:9px;cursor:pointer;transition:.15s;}
   .limpar button:hover{background:var(--ciano);color:#fff;}
 
+  .tipos{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;}
+  .tipos .rotulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cinza);}
+  .chip{padding:9px 18px;border-radius:22px;border:1.5px solid var(--borda);background:#fff;color:var(--cinza);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;user-select:none;}
+  .chip:hover{border-color:var(--ciano);color:var(--azul2);}
+  .chip.on{background:var(--azul2);border-color:var(--azul2);color:#fff;box-shadow:0 2px 8px rgba(0,80,200,.25);}
+  .chip.todos.on{background:var(--ciano);border-color:var(--ciano);}
+
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0;}
+  .card.oculto{display:none;}
   .card{background:var(--branco);border:1px solid var(--borda);border-radius:12px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,50,155,.05);}
   .card .num{font-size:26px;font-weight:800;color:var(--azul);}
   .card .lbl{font-size:11.5px;font-weight:600;color:var(--cinza);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
@@ -71,7 +78,7 @@
     <h1>Rede de Atendimento Full</h1>
     <div class="sub">Consulta de prestadores por tipo de atendimento — planos NDI MG</div>
   </div>
-  <div class="logo">Hapvida <span>NDI</span></div>
+  <div class="logo"><img src="data:image/png;base64,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" alt="Hapvida"></div>
 </header>
 
 <div class="wrap">
@@ -101,13 +108,23 @@
     </div>
   </div>
 
+  <div class="tipos">
+    <span class="rotulo">Tipo de atendimento:</span>
+    <button class="chip todos on" id="chipTodos">Todos</button>
+    <button class="chip" data-svc="1">Internação</button>
+    <button class="chip" data-svc="2">Pronto Socorro</button>
+    <button class="chip" data-svc="4">Maternidade</button>
+    <button class="chip" data-svc="8">Centro Clínico</button>
+    <button class="chip" data-svc="16">Laboratório</button>
+  </div>
+
   <div class="cards">
     <div class="card destaque"><div class="num" id="cTotal">0</div><div class="lbl">Prestadores</div></div>
-    <div class="card"><div class="num" id="cInt">0</div><div class="lbl">Internação</div></div>
-    <div class="card"><div class="num" id="cPS">0</div><div class="lbl">Pronto Socorro</div></div>
-    <div class="card"><div class="num" id="cMat">0</div><div class="lbl">Maternidade</div></div>
-    <div class="card"><div class="num" id="cCC">0</div><div class="lbl">Centro Clínico</div></div>
-    <div class="card"><div class="num" id="cLab">0</div><div class="lbl">Laboratório</div></div>
+    <div class="card" id="cardInt"><div class="num" id="cInt">0</div><div class="lbl">Internação</div></div>
+    <div class="card" id="cardPS"><div class="num" id="cPS">0</div><div class="lbl">Pronto Socorro</div></div>
+    <div class="card" id="cardMat"><div class="num" id="cMat">0</div><div class="lbl">Maternidade</div></div>
+    <div class="card" id="cardCC"><div class="num" id="cCC">0</div><div class="lbl">Centro Clínico</div></div>
+    <div class="card" id="cardLab"><div class="num" id="cLab">0</div><div class="lbl">Laboratório</div></div>
   </div>
 
   <div class="tabela-box">
@@ -118,11 +135,11 @@
             <th>Prestador</th>
             <th>Cidade / UF</th>
             <th>Rede</th>
-            <th class="svc">Internação</th>
-            <th class="svc">Pronto Socorro</th>
-            <th class="svc">Maternidade</th>
-            <th class="svc">Centro Clínico</th>
-            <th class="svc">Laboratório</th>
+            <th class="svc" id="thInt">Internação</th>
+            <th class="svc" id="thPS">Pronto Socorro</th>
+            <th class="svc" id="thMat">Maternidade</th>
+            <th class="svc" id="thCC">Centro Clínico</th>
+            <th class="svc" id="thLab">Laboratório</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -173,21 +190,46 @@ function norm(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
 
 function planosSelecionados(){ return fPl.value ? [fPl.value] : DATA.plans.map(p=>p.k); }
 
+// seleção de tipos de atendimento (chips)
+let svcAtivos = 0; // 0 = todos
+const chips = [...document.querySelectorAll('.chip[data-svc]')];
+const chipTodos = $('chipTodos');
+function syncChips(){
+  chips.forEach(c => c.classList.toggle('on', !!(svcAtivos & +c.dataset.svc)));
+  chipTodos.classList.toggle('on', svcAtivos===0);
+}
+chipTodos.addEventListener('click', ()=>{ svcAtivos=0; syncChips(); render(); });
+chips.forEach(c => c.addEventListener('click', ()=>{
+  const bit = +c.dataset.svc;
+  svcAtivos = svcAtivos===0 ? bit : (svcAtivos ^ bit); // em "Todos", isola o tipo clicado
+  syncChips(); render();
+}));
+function svcsVisiveis(){ return svcAtivos===0 ? SVCS : SVCS.filter(s => svcAtivos & s.bit); }
+
 function render(){
   const uf=fUf.value, ci=fCi.value, op=fOp.value, busca=norm(fNo.value.trim());
   const plans = planosSelecionados();
+  const visiveis = svcsVisiveis();
+  const maskAtivo = visiveis.reduce((m,s)=>m|s.bit, 0);
+
+  // mostra/oculta colunas e cards conforme os tipos selecionados
+  SVCS.forEach(s => {
+    const vis = !!(maskAtivo & s.bit);
+    $('th'+s.id).style.display = vis ? '' : 'none';
+    $('card'+s.id).classList.toggle('oculto', !vis);
+  });
 
   const rows = DATA.rows.filter(r =>
     (!op || r.op===op) &&
     (!uf || r.uf===uf) &&
     (!ci || r.ci===ci) &&
     (!busca || norm(r.no).includes(busca)) &&
-    plans.some(pk => r.pl[pk])
+    plans.some(pk => (r.pl[pk]||0) & maskAtivo)
   );
 
   const cont = {Int:0,PS:0,Mat:0,CC:0,Lab:0};
   const html = rows.map(r => {
-    const cells = SVCS.map(s => {
+    const cells = visiveis.map(s => {
       const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
       if (!tem.length) return '<td><span class="chk none">—</span></td>';
       cont[s.id]++;
@@ -215,6 +257,7 @@ fUf.addEventListener('change', ()=>{ popularCidades(); render(); });
 fNo.addEventListener('input', render);
 $('btnLimpar').addEventListener('click', ()=>{
   fOp.value=''; fPl.value=''; fUf.value=''; fNo.value='';
+  svcAtivos=0; syncChips();
   popularCidades(); fCi.value=''; render();
 });
 
