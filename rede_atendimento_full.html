@@ -136,7 +136,7 @@
     <button class="chip" data-svc="1">Internação</button>
     <button class="chip" data-svc="2">Pronto Socorro</button>
     <button class="chip" data-svc="4">Maternidade</button>
-    <button class="chip" data-svc="8">Centro Clínico</button>
+    <button class="chip" data-svc="8">Consultórios/Clínicas</button>
     <button class="chip" data-svc="16">Laboratório</button>
   </div>
 
@@ -145,7 +145,7 @@
     <div class="card" id="cardInt"><div class="num" id="cInt">0</div><div class="lbl">Internação</div></div>
     <div class="card" id="cardPS"><div class="num" id="cPS">0</div><div class="lbl">Pronto Socorro</div></div>
     <div class="card" id="cardMat"><div class="num" id="cMat">0</div><div class="lbl">Maternidade</div></div>
-    <div class="card" id="cardCC"><div class="num" id="cCC">0</div><div class="lbl">Centro Clínico</div></div>
+    <div class="card" id="cardCC"><div class="num" id="cCC">0</div><div class="lbl">Consultórios/Clínicas</div></div>
     <div class="card" id="cardLab"><div class="num" id="cLab">0</div><div class="lbl">Laboratório</div></div>
   </div>
 
@@ -161,7 +161,7 @@
             <th class="svc" id="thInt">Internação</th>
             <th class="svc" id="thPS">Pronto Socorro</th>
             <th class="svc" id="thMat">Maternidade</th>
-            <th class="svc" id="thCC">Centro Clínico</th>
+            <th class="svc" id="thCC">Consultórios/Clínicas</th>
             <th class="svc" id="thLab">Laboratório</th>
           </tr>
         </thead>
@@ -188,7 +188,7 @@ const SVCS = [
   {bit:1,  id:'Int', nome:'Internação'},
   {bit:2,  id:'PS',  nome:'Pronto Socorro'},
   {bit:4,  id:'Mat', nome:'Maternidade'},
-  {bit:8,  id:'CC',  nome:'Centro Clínico'},
+  {bit:8,  id:'CC',  nome:'Consultórios/Clínicas'},
   {bit:16, id:'Lab', nome:'Laboratório'},
 ];
 const PLAN_NAME = {}, PLAN_OP = {};
