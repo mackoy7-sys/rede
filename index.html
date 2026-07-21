@@ -67,8 +67,17 @@
   .pllist div{padding:2px 0;border-bottom:1px dashed #E4EBF3;}
   .pllist b{color:var(--azul);}
   .chk{display:inline-flex;width:26px;height:26px;border-radius:50%;align-items:center;justify-content:center;font-size:14px;font-weight:800;}
-  .chk.full{background:#E1F5EA;color:var(--verde);}
-  .chk.part{background:#FFF1E2;color:var(--laranja);}
+  .chk.full{background:#E1F5EA;color:var(--verde);cursor:pointer;}
+  .chk.part{background:#FFF1E2;color:var(--laranja);cursor:pointer;}
+  .chk.full:hover,.chk.part:hover{outline:2px solid var(--ciano);}
+  #svcPop{position:fixed;display:none;z-index:50;background:#fff;border:1px solid var(--borda);border-radius:12px;box-shadow:0 10px 30px rgba(0,30,80,.18);padding:12px 14px;width:320px;max-height:340px;overflow-y:auto;font-size:12px;text-align:left;}
+  #svcPop .pop-tit{font-weight:800;color:var(--azul);margin-bottom:4px;font-size:12.5px;}
+  #svcPop .pop-sec{font-weight:700;margin:8px 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
+  #svcPop .pop-sec.ok{color:var(--verde);}
+  #svcPop .pop-sec.no{color:var(--laranja);}
+  #svcPop .pop-item{padding:2px 0;border-bottom:1px dashed #EDF2F7;color:#3A4A5C;}
+  #svcPop .pop-item b{color:var(--azul);}
+  #svcPop .pop-fechar{position:sticky;top:0;float:right;border:none;background:#EAF3FF;color:var(--azul2);font-weight:800;border-radius:50%;width:20px;height:20px;cursor:pointer;line-height:1;}
   .chk.none{color:#C7D2DE;font-weight:400;}
 
   .vazio{padding:50px 20px;text-align:center;color:var(--cinza);font-size:15px;display:none;}
@@ -163,7 +172,7 @@
     <div class="rodape-tabela">
       <div class="legenda">
         <div class="item"><span class="chk full">✓</span> Atende em todos os planos selecionados</div>
-        <div class="item"><span class="chk part">◐</span> Atende em parte dos planos (ver detalhe no ícone)</div>
+        <div class="item"><span class="chk part">◐</span> Atende em parte dos planos — <b>clique no ícone</b> para ver quais</div>
       </div>
       <div id="contagem"></div>
     </div>
@@ -293,8 +302,7 @@ function render(){
       cont[s.id]++;
       const cobre = plans.filter(pk => r.pl[pk]); // planos em que o prestador existe
       const total = tem.length === cobre.length;
-      const tip = s.nome + ': ' + tem.map(pk=>PLAN_NAME[pk]).join(', ');
-      return `<td><span class="chk ${total?'full':'part'}" title="${tip}">${total?'✓':'◐'}</span></td>`;
+      return `<td><span class="chk ${total?'full':'part'}" data-i="${idx}" data-svc="${s.bit}" title="Clique para ver os planos">${total?'✓':'◐'}</span></td>`;
     }).join('');
     const badge = r.re==='Própria' ? '<span class="badge propria">Própria</span>' : '<span class="badge cred">Credenciada</span>';
     return `<tr>
@@ -321,6 +329,28 @@ $('btnLimpar').addEventListener('click', ()=>{
   redeSel=''; chipsRede.forEach(x => x.classList.toggle('on', x.dataset.rede===''));
   popularCidades(); fCi.value=''; popularPlanos(); render();
 });
+
+const svcPop = document.createElement('div'); svcPop.id = 'svcPop'; document.body.appendChild(svcPop);
+function fecharPop(){ svcPop.style.display = 'none'; }
+document.addEventListener('click', e => {
+  const chk = e.target.closest('.chk.full, .chk.part');
+  if (!chk || !chk.dataset.svc) { if (!svcPop.contains(e.target)) fecharPop(); return; }
+  const r = lastRows[+chk.dataset.i], bit = +chk.dataset.svc;
+  const svcNome = SVCS.find(s => s.bit===bit).nome;
+  const tem = lastPlans.filter(pk => (r.pl[pk]||0) & bit);
+  const nao = lastPlans.filter(pk => r.pl[pk] && !((r.pl[pk]||0) & bit));
+  const item = pk => `<div class="pop-item"><b>${PLAN_OP[pk]}</b> · ${PLAN_NAME[pk]}</div>`;
+  svcPop.innerHTML = `<button class="pop-fechar" onclick="this.parentElement.style.display='none'">×</button>`
+    + `<div class="pop-tit">${r.no} — ${svcNome}</div>`
+    + `<div class="pop-sec ok">✓ Atende em ${tem.length} plano${tem.length>1?'s':''}</div>` + tem.map(item).join('')
+    + (nao.length ? `<div class="pop-sec no">◐ Não atende em ${nao.length} plano${nao.length>1?'s':''}</div>` + nao.map(item).join('') : '');
+  const rect = chk.getBoundingClientRect();
+  svcPop.style.display = 'block';
+  svcPop.style.left = Math.max(8, Math.min(rect.left - 140, window.innerWidth - 336)) + 'px';
+  const abaixo = rect.bottom + 6, h = Math.min(340, svcPop.scrollHeight);
+  svcPop.style.top = (abaixo + h > window.innerHeight ? Math.max(8, rect.top - h - 6) : abaixo) + 'px';
+});
+document.querySelector('.tabela-scroll').addEventListener('scroll', fecharPop);
 
 $('tbody').addEventListener('toggle', e => {
   const det = e.target;
