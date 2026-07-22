@@ -88,6 +88,24 @@
   .legenda .item{display:flex;align-items:center;gap:6px;}
   .legenda .chk{width:16px;height:16px;font-size:9px;}
   footer{margin-top:10px;text-align:center;font-size:10.5px;color:#8FA0B3;}
+  .btn-pdf{border:1.5px solid var(--azul2);background:#fff;color:var(--azul2);font-weight:700;font-size:10.5px;padding:4px 12px;border-radius:14px;cursor:pointer;margin-left:10px;white-space:nowrap;}
+  .btn-pdf:hover{background:var(--azul2);color:#fff;}
+  #printHeader{display:none;}
+  @media print{
+    body{background:#fff;}
+    header,.filtros,.tipos,.cards,footer,.vazio,.btn-pdf{display:none !important;}
+    .wrap{padding:0;max-width:none;}
+    #printHeader{display:block;margin-bottom:8px;}
+    #printHeader .ph-tit{font-size:15px;font-weight:800;color:var(--azul);}
+    #printHeader .ph-sub{font-size:10px;color:#445;margin-top:3px;line-height:1.5;}
+    .tabela-box{border:none;box-shadow:none;border-radius:0;}
+    .tabela-scroll{max-height:none !important;overflow:visible !important;}
+    table{min-width:0;width:100%;}
+    thead th{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    tbody tr{break-inside:avoid;}
+    .chk,.badge,.dist,.pldet summary{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rodape-tabela{border-top:1px solid #ccc;}
+  }
   @media (max-width:700px){ header h1{font-size:17px;} .wrap{padding:14px 12px 40px;} }
 </style>
 </head>
@@ -156,6 +174,11 @@
     <div class="card" id="cardLab"><div class="num" id="cLab">0</div><div class="lbl">Laboratório</div></div>
   </div>
 
+  <div id="printHeader">
+    <div class="ph-tit">Rede de Atendimento Full — Hapvida · NDI · Clinipam · CCG</div>
+    <div class="ph-sub" id="phFiltros"></div>
+  </div>
+
   <div class="tabela-box">
     <div class="tabela-scroll">
       <table>
@@ -182,6 +205,7 @@
         <div class="item"><span class="chk part">◐</span> Atende em parte dos planos — <b>clique no ícone</b> para ver quais</div>
       </div>
       <div id="contagem"></div>
+      <button class="btn-pdf" id="btnPdf">🖨️ Salvar PDF</button>
     </div>
   </div>
 
@@ -436,6 +460,24 @@ $('tbody').addEventListener('toggle', e => {
   lista.innerHTML = lastPlans.filter(pk => r.pl[pk])
     .map(pk => `<div><b>${PLAN_OP[pk]}</b> · ${PLAN_NAME[pk]}</div>`).join('');
 }, true);
+
+$('btnPdf').addEventListener('click', ()=>{
+  const parts = [];
+  if (fOp.value) parts.push('Operadora: ' + fOp.value);
+  if (fPl.value) parts.push('Plano: ' + fPl.options[fPl.selectedIndex].text);
+  if (fUf.value) parts.push('Estado: ' + fUf.value);
+  if (fCi.value) parts.push('Cidade: ' + fCi.value);
+  if (fNo.value.trim()) parts.push('Nome: "' + fNo.value.trim() + '"');
+  if (userLL) parts.push('CEP ' + fCep.value.replace(/\D/g,'').replace(/(\d{5})(\d{3})/,'$1-$2') + ' (raio 15 km, mais próximos primeiro)');
+  if (redeSel) parts.push('Rede: ' + redeSel);
+  if (svcAtivos) parts.push('Tipo: ' + SVCS.filter(s => svcAtivos & s.bit).map(s => s.nome).join(', '));
+  if (!parts.length) parts.push('Sem filtros — visão geral');
+  $('phFiltros').innerHTML = parts.join(' · ')
+    + '<br>' + $('contagem').textContent
+    + ' · Emitido em ' + new Date().toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    + ' · Fonte: relatórios oficiais de rede de atendimento';
+  window.print();
+});
 
 popularPlanos();
 popularCidades();
