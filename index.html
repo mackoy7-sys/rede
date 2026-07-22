@@ -35,6 +35,7 @@
   .chip.on{background:var(--azul2);border-color:var(--azul2);color:#fff;box-shadow:0 2px 8px rgba(0,80,200,.25);}
   .chip.todos.on{background:var(--ciano);border-color:var(--ciano);}
   .chip.rede.on{background:var(--verde);border-color:var(--verde);}
+  .chip.ppo.on{background:var(--laranja);border-color:var(--laranja);color:#fff;}
   .divisor{width:1px;height:24px;background:var(--borda);margin:0 4px;}
 
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:7px 0;}
@@ -168,6 +169,9 @@
     <button class="chip rede" data-rede="Própria">Própria</button>
     <button class="chip rede" data-rede="Credenciada">Credenciada</button>
     <span class="divisor"></span>
+    <span class="rotulo">Produto:</span>
+    <button class="chip ppo" id="chipPPO" title="Somente os planos PPO (Advance 600/700, Premium 900/Care, Infinity 1000)">PPO</button>
+    <span class="divisor"></span>
     <span class="rotulo">Tipo de atendimento:</span>
     <button class="chip todos on" id="chipTodos">Todos</button>
     <button class="chip" data-svc="1">Internação</button>
@@ -267,7 +271,7 @@ function popularPlanos(){
   fPl.innerHTML = '<option value="">Todos os planos</option>';
   const ops = [...new Set(DATA.plans.map(p=>p.op))].filter(o => !op || o===op);
   ops.forEach(o => {
-    const itens = DATA.plans.filter(p => p.op===o && (!disp || disp.has(p.k)));
+    const itens = DATA.plans.filter(p => p.op===o && (!disp || disp.has(p.k)) && (!ppoAtivo || isPPO(p)));
     if (!itens.length) return;
     const grp = document.createElement('optgroup'); grp.label = o;
     itens.forEach(p => grp.appendChild(new Option(p.n, p.k)));
@@ -335,7 +339,17 @@ async function localizaCep(cep){
   render();
 }
 
-function planosSelecionados(){ if (fPl.value) return [fPl.value]; const op=fOp.value, disp=planosDisponiveis(); return DATA.plans.filter(p => (!op || p.op===op) && (!disp || disp.has(p.k))).map(p=>p.k); }
+function planosSelecionados(){ if (fPl.value) return [fPl.value]; const op=fOp.value, disp=planosDisponiveis(); return DATA.plans.filter(p => (!op || p.op===op) && (!disp || disp.has(p.k)) && (!ppoAtivo || isPPO(p))).map(p=>p.k); }
+
+// filtro de produto PPO (Advance/Premium/Infinity — planos nacionais)
+let ppoAtivo = false;
+const chipPPO = $('chipPPO');
+const isPPO = p => p.n.includes('PPO');
+chipPPO.addEventListener('click', ()=>{
+  ppoAtivo = !ppoAtivo;
+  chipPPO.classList.toggle('on', ppoAtivo);
+  popularPlanos(); render();
+});
 
 // seleção de rede (Todos | Própria | Credenciada) — escolha única
 let redeSel = '';
@@ -436,6 +450,7 @@ fNo.addEventListener('input', render);
 $('btnLimpar').addEventListener('click', ()=>{
   fOp.value=''; fPl.value=''; fUf.value=''; fNo.value='';
   fCep.value=''; userLL=null; cepStatus.textContent='';
+  ppoAtivo=false; chipPPO.classList.remove('on');
   svcAtivos=0; syncChips();
   redeSel=''; chipsRede.forEach(x => x.classList.toggle('on', x.dataset.rede===''));
   popularCidades(); fCi.value=''; popularPlanos(); render();
@@ -481,6 +496,7 @@ $('btnPdf').addEventListener('click', ()=>{
   if (fCi.value) parts.push('Cidade: ' + fCi.value);
   if (fNo.value.trim()) parts.push('Nome: "' + fNo.value.trim() + '"');
   if (userLL) parts.push('CEP ' + fCep.value.replace(/\D/g,'').replace(/(\d{5})(\d{3})/,'$1-$2') + ' (raio 15 km, mais próximos primeiro)');
+  if (ppoAtivo) parts.push('Produto: PPO (Advance/Premium/Infinity)');
   if (redeSel) parts.push('Rede: ' + redeSel);
   if (svcAtivos) parts.push('Tipo: ' + SVCS.filter(s => svcAtivos & s.bit).map(s => s.nome).join(', '));
   if (!parts.length) parts.push('Sem filtros — visão geral');
