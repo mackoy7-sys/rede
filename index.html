@@ -139,15 +139,21 @@
     </div>
     <div class="filtro">
       <label>Plano</label>
-      <select id="fPl"><option value="">Todos os planos</option></select>
+      <select id="fPl" style="display:none"><option value="">Todos os planos</option></select>
+      <input id="fPlBusca" list="dlPl" placeholder="Todos — digite p/ buscar" autocomplete="off">
+      <datalist id="dlPl"></datalist>
     </div>
     <div class="filtro">
       <label>Estado</label>
-      <select id="fUf"><option value="">Todos</option></select>
+      <select id="fUf" style="display:none"><option value="">Todos</option></select>
+      <input id="fUfBusca" list="dlUf" placeholder="Todos" autocomplete="off" maxlength="2" style="text-transform:uppercase">
+      <datalist id="dlUf"></datalist>
     </div>
     <div class="filtro">
       <label>Cidade</label>
-      <select id="fCi"><option value="">Todas</option></select>
+      <select id="fCi" style="display:none"><option value="">Todas</option></select>
+      <input id="fCiBusca" list="dlCi" placeholder="Todas — digite p/ buscar" autocomplete="off">
+      <datalist id="dlCi"></datalist>
     </div>
     <div class="filtro">
       <label>Nome do Hospital / Laboratório</label>
@@ -278,6 +284,8 @@ function popularPlanos(){
     fPl.appendChild(grp);
   });
   if ([...fPl.options].some(x=>x.value===atual)) fPl.value = atual;
+  espelhaDatalist(fPl, 'dlPl', true);
+  sincronizaBusca(fPl, 'fPlBusca', true);
 }
 [...new Set(DATA.rows.map(r=>r.uf))].sort().forEach(v => fUf.add(new Option(v,v)));
 
@@ -287,6 +295,8 @@ function popularCidades(){
   fCi.innerHTML = '<option value="">Todas</option>';
   cidades.forEach(c => fCi.add(new Option(c,c)));
   if (cidades.includes(atual)) fCi.value = atual;
+  espelhaDatalist(fCi, 'dlCi', false);
+  sincronizaBusca(fCi, 'fCiBusca', false);
 }
 
 function norm(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
@@ -450,6 +460,7 @@ fNo.addEventListener('input', render);
 $('btnLimpar').addEventListener('click', ()=>{
   fOp.value=''; fPl.value=''; fUf.value=''; fNo.value='';
   fCep.value=''; userLL=null; cepStatus.textContent='';
+  fPlB.value=''; fUfB.value=''; fCiB.value='';
   ppoAtivo=false; chipPPO.classList.remove('on');
   svcAtivos=0; syncChips();
   redeSel=''; chipsRede.forEach(x => x.classList.toggle('on', x.dataset.rede===''));
@@ -507,8 +518,48 @@ $('btnPdf').addEventListener('click', ()=>{
   window.print();
 });
 
+// --- busca por digitação nos filtros Plano/Estado/Cidade (adaptadores sobre os selects ocultos) ---
+function espelhaDatalist(sel, dlId, usaTexto){
+  const dl = $(dlId); if (!dl) return;
+  dl.innerHTML = '';
+  [...sel.options].forEach(o => {
+    if (!o.value) return;
+    const opt = document.createElement('option');
+    opt.value = usaTexto ? o.text : o.value;
+    if (usaTexto && o.parentElement.tagName === 'OPTGROUP') opt.label = o.parentElement.label;
+    dl.appendChild(opt);
+  });
+}
+function sincronizaBusca(sel, inpId, usaTexto){
+  const inp = $(inpId); if (!inp || !inp.value) return;
+  // se a opção digitada não existe mais (mudou praça/operadora) e o select zerou, limpa o campo
+  const existe = [...sel.options].some(o => o.value && norm(usaTexto ? o.text : o.value) === norm(inp.value.trim()));
+  if (!sel.value && !existe) inp.value = '';
+}
+function ligaBusca(inp, sel, resolve){
+  inp.addEventListener('input', ()=>{
+    const txt = inp.value.trim();
+    if (!txt){ if (sel.value){ sel.value=''; sel.dispatchEvent(new Event('change')); } return; }
+    const v = resolve(txt);
+    if (v !== null && sel.value !== v){ sel.value = v; sel.dispatchEvent(new Event('change')); }
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const txt = norm(inp.value.trim()); if (!txt) return;
+    const ops = [...sel.options].filter(o => o.value);
+    const alvo = ops.find(o => norm(o.text).startsWith(txt)) || ops.find(o => norm(o.text).includes(txt));
+    if (alvo){ inp.value = alvo.text; if (sel.value !== alvo.value){ sel.value = alvo.value; sel.dispatchEvent(new Event('change')); } }
+  });
+}
+const fPlB = $('fPlBusca'), fUfB = $('fUfBusca'), fCiB = $('fCiBusca');
+$('dlUf').innerHTML = '';
+ligaBusca(fPlB, fPl, txt => { const o = [...fPl.options].find(o => o.value && norm(o.text) === norm(txt)); return o ? o.value : null; });
+ligaBusca(fUfB, fUf, txt => { const t = txt.toUpperCase(); return [...fUf.options].some(o => o.value === t) ? t : null; });
+ligaBusca(fCiB, fCi, txt => { const o = [...fCi.options].find(o => o.value && norm(o.value) === norm(txt)); return o ? o.value : null; });
+
 popularPlanos();
 popularCidades();
+espelhaDatalist(fUf, 'dlUf', false);
 render();
 </script>
 </body>
