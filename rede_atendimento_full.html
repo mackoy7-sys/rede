@@ -91,6 +91,7 @@
   .btn-pdf{border:1.5px solid var(--azul2);background:#fff;color:var(--azul2);font-weight:700;font-size:10.5px;padding:4px 12px;border-radius:14px;cursor:pointer;margin-left:10px;white-space:nowrap;}
   .btn-pdf:hover{background:var(--azul2);color:#fff;}
   #printHeader{display:none;}
+  @page{size:A4 landscape;margin:9mm;}
   @media print{
     body{background:#fff;}
     header,.filtros,.tipos,.cards,footer,.vazio,.btn-pdf{display:none !important;}
@@ -100,11 +101,22 @@
     #printHeader .ph-sub{font-size:10px;color:#445;margin-top:3px;line-height:1.5;}
     .tabela-box{border:none;box-shadow:none;border-radius:0;}
     .tabela-scroll{max-height:none !important;overflow:visible !important;}
-    table{min-width:0;width:100%;}
-    thead th{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    table{min-width:0 !important;width:100%;table-layout:auto;font-size:10.5px;}
+    thead th{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:4px 5px;font-size:9px;}
+    thead th:first-child{min-width:0;}
+    thead th.svc{min-width:0;}
+    tbody td{padding:2px 5px;}
+    .nome{font-size:10.5px;}
+    .end{font-size:9px;}
+    .tel{font-size:8.5px;}
+    .cidade-uf{white-space:normal;font-size:10px;}
+    .chk{width:16px;height:16px;font-size:9px;}
+    .badge{font-size:8.5px;padding:1px 6px;}
+    .dist{font-size:8.5px;padding:1px 6px;}
+    .pldet summary{font-size:8.5px;padding:1px 6px;}
     tbody tr{break-inside:avoid;}
     .chk,.badge,.dist,.pldet summary{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .rodape-tabela{border-top:1px solid #ccc;}
+    .rodape-tabela{border-top:1px solid #ccc;font-size:9px;}
   }
   @media (max-width:700px){ header h1{font-size:17px;} .wrap{padding:14px 12px 40px;} }
 </style>
