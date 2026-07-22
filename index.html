@@ -359,15 +359,19 @@ function render(){
     distMap = new Map(perto);
   }
 
-  lastRows = rows; lastPlans = plans;
+  lastPlans = plans;
   const cont = {Int:0,PS:0,Mat:0,CC:0,Lab:0};
-  const html = rows.map((r, idx) => {
+  rows.forEach(r => visiveis.forEach(s => {
+    if (plans.some(pk => (r.pl[pk]||0) & s.bit)) cont[s.id]++;
+  }));
+  const exibir = rows.slice(0, 10);
+  lastRows = exibir;
+  const html = exibir.map((r, idx) => {
     const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
     const plCell = `<td><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
     const cells = visiveis.map(s => {
       const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
       if (!tem.length) return '<td><span class="chk none">—</span></td>';
-      cont[s.id]++;
       const cobre = plans.filter(pk => r.pl[pk]); // planos em que o prestador existe
       const total = tem.length === cobre.length;
       return `<td><span class="chk ${total?'full':'part'}" data-i="${idx}" data-svc="${s.bit}" title="Clique para ver os planos">${total?'✓':'◐'}</span></td>`;
@@ -383,7 +387,9 @@ function render(){
   $('vazio').style.display = rows.length ? 'none' : 'block';
   $('cTotal').textContent = rows.length.toLocaleString('pt-BR');
   SVCS.forEach(s => $('c'+s.id).textContent = cont[s.id].toLocaleString('pt-BR'));
-  $('contagem').textContent = rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' — raio de 15 km do CEP, mais próximos primeiro' : '');
+  $('contagem').textContent = (rows.length > 10
+    ? 'mostrando os ' + exibir.length + (userLL ? ' mais próximos' : ' primeiros') + ' de ' + rows.length.toLocaleString('pt-BR') + ' prestadores — refine os filtros p/ ver outros'
+    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)') + (userLL ? ' · raio de 15 km do CEP' : '');
 }
 
 fUf.addEventListener('change', ()=>{ popularCidades(); popularPlanos(); render(); });
