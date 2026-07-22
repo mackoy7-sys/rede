@@ -400,7 +400,7 @@ function render(){
   rows.forEach(r => visiveis.forEach(s => {
     if (plans.some(pk => (r.pl[pk]||0) & s.bit)) cont[s.id]++;
   }));
-  const exibir = rows.slice(0, 10);
+  const exibir = userLL ? rows.slice(0, 10) : rows; // top-10 só na busca por CEP
   lastRows = exibir;
   const html = exibir.map((r, idx) => {
     const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
@@ -423,9 +423,9 @@ function render(){
   $('vazio').style.display = rows.length ? 'none' : 'block';
   $('cTotal').textContent = rows.length.toLocaleString('pt-BR');
   SVCS.forEach(s => $('c'+s.id).textContent = cont[s.id].toLocaleString('pt-BR'));
-  $('contagem').textContent = (rows.length > 10
-    ? 'mostrando os ' + exibir.length + (userLL ? ' mais próximos' : ' primeiros') + ' de ' + rows.length.toLocaleString('pt-BR') + ' prestadores — refine os filtros p/ ver outros'
-    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)') + (userLL ? ' · raio de 15 km do CEP' : '');
+  $('contagem').textContent = (userLL && rows.length > 10)
+    ? 'mostrando os 10 mais próximos de ' + rows.length.toLocaleString('pt-BR') + ' prestadores no raio de 15 km do CEP — refine os filtros p/ ver outros'
+    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' · raio de 15 km do CEP' : '');
 }
 
 fUf.addEventListener('change', ()=>{ popularCidades(); popularPlanos(); render(); });
