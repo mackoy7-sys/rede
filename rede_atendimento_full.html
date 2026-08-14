@@ -322,23 +322,52 @@ fCep.addEventListener('input', ()=>{
   cepStatus.textContent = 'localizando CEP…';
   cepTimer = setTimeout(()=>localizaCep(cep), 350);
 });
+function mediaPts(pts){
+  return [pts.reduce((s,x)=>s+x.ll[0],0)/pts.length, pts.reduce((s,x)=>s+x.ll[1],0)/pts.length];
+}
 async function localizaCep(cep){
   const seq = ++cepSeq;
   let ll = null, rot = '';
+  // 1) AwesomeAPI: ponto exato do CEP
   try{
     const r = await fetch('https://cep.awesomeapi.com.br/json/'+cep);
     if (r.ok){ const j = await r.json();
-      if (j.lat && j.lng){ ll = [+j.lat, +j.lng]; rot = (j.city||'')+'/'+(j.state||''); } }
+      if (j.lat && j.lng){ ll = [+j.lat, +j.lng]; rot = (j.district?j.district+', ':'')+(j.city||'')+'/'+(j.state||''); } }
   }catch(e){}
+  // 2) BrasilAPI v2: alguns CEPs têm coordenada
+  if (!ll){
+    try{
+      const r = await fetch('https://brasilapi.com.br/api/cep/v2/'+cep);
+      if (r.ok){ const j = await r.json();
+        const c = ((j.location||{}).coordinates)||{};
+        if (c.latitude && c.longitude){ ll = [+c.latitude, +c.longitude]; rot = (j.neighborhood?j.neighborhood+', ':'')+(j.city||'')+'/'+(j.state||''); } }
+    }catch(e){}
+  }
+  // 3) ViaCEP dá rua/bairro/cidade → refina em 3 níveis
   if (!ll){
     try{
       const r = await fetch('https://viacep.com.br/ws/'+cep+'/json/');
       if (r.ok){ const j = await r.json();
         if (!j.erro){
-          const pts = DATA.rows.filter(x => x.ll && x.uf===j.uf && norm(x.ci)===norm(j.localidade||''));
-          if (pts.length){
-            ll = [pts.reduce((s,x)=>s+x.ll[0],0)/pts.length, pts.reduce((s,x)=>s+x.ll[1],0)/pts.length];
-            rot = j.localidade+'/'+j.uf+' (centro aprox.)';
+          const cidade = j.localidade||'', uf = j.uf||'', rua = j.logradouro||'', bairro = j.bairro||'';
+          // 3a) geocodifica a RUA no OpenStreetMap
+          if (rua){
+            try{
+              const q = encodeURIComponent(rua+', '+cidade+', '+uf+', Brasil');
+              const rn = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q='+q);
+              if (rn.ok){ const jn = await rn.json();
+                if (jn[0] && jn[0].lat){ ll = [+jn[0].lat, +jn[0].lon]; rot = rua+(bairro?', '+bairro:'')+', '+cidade+'/'+uf; } }
+            }catch(e){}
+          }
+          // 3b) média dos prestadores precisos do mesmo BAIRRO
+          if (!ll && bairro){
+            const pts = DATA.rows.filter(x => x.ll && !x.ap && x.uf===uf && norm(x.ci)===norm(cidade) && norm(x.ba||'')===norm(bairro));
+            if (pts.length){ ll = mediaPts(pts); rot = bairro+', '+cidade+'/'+uf+' (bairro aprox.)'; }
+          }
+          // 3c) média da cidade (último recurso)
+          if (!ll){
+            const pts = DATA.rows.filter(x => x.ll && x.uf===uf && norm(x.ci)===norm(cidade));
+            if (pts.length){ ll = mediaPts(pts); rot = cidade+'/'+uf+' (centro aprox.)'; }
           }
         } }
     }catch(e){}
