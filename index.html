@@ -248,6 +248,27 @@ const PLAN_NAME = {}, PLAN_OP = {};
 DATA.plans.forEach(p => { PLAN_NAME[p.k] = p.n; PLAN_OP[p.k] = p.op; });
 let lastRows = [], lastPlans = [];
 
+// nº de prestadores de cada plano por cidade — p/ separar rede LOCAL de rede própria de
+// passagem (planos regionais listam a rede própria nacional inteira como abrangência)
+const CITY_PLAN_N = {};
+DATA.rows.forEach(r => {
+  const k = r.ci + '|' + r.uf;
+  const m = CITY_PLAN_N[k] || (CITY_PLAN_N[k] = {});
+  for (const pk in r.pl) m[pk] = (m[pk]||0) + 1;
+});
+const PLAN_BY_K = {}; DATA.plans.forEach(p => PLAN_BY_K[p.k] = p);
+function planosDoPrestador(r){
+  // planos do prestador com rede LOCAL na cidade dele: praça cobre a cidade, plano nacional
+  // (PPO) ou >=2 prestadores do plano na cidade (só a própria de passagem = 1, fica fora)
+  const m = CITY_PLAN_N[r.ci + '|' + r.uf] || {};
+  return DATA.plans.filter(p => {
+    if (!r.pl[p.k]) return false;
+    if (p.nac) return true;
+    if ((p.cis||[]).includes(r.ci) || (p.ufs||[]).includes(r.uf)) return true;
+    return (m[p.k]||0) >= 2;
+  });
+}
+
 const $ = id => document.getElementById(id);
 const fOp=$('fOp'), fPl=$('fPl'), fUf=$('fUf'), fCi=$('fCi'), fNo=$('fNo');
 
@@ -458,7 +479,7 @@ function render(){
   const exibir = userLL ? rows.slice(0, 10) : rows; // top-10 só na busca por CEP
   lastRows = exibir;
   const html = exibir.map((r, idx) => {
-    const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
+    const nPl = planosDoPrestador(r).length;
     const plCell = `<td><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
     const cells = visiveis.map(s => {
       const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
@@ -526,8 +547,8 @@ $('tbody').addEventListener('toggle', e => {
   const lista = det.querySelector('.pllist');
   if (lista.childElementCount) return;
   const r = lastRows[+det.dataset.i];
-  lista.innerHTML = lastPlans.filter(pk => r.pl[pk])
-    .map(pk => `<div><b>${PLAN_OP[pk]}</b> · ${PLAN_NAME[pk]}</div>`).join('');
+  lista.innerHTML = planosDoPrestador(r)
+    .map(p => `<div><b>${p.op}</b> · ${p.n}</div>`).join('');
 }, true);
 
 $('btnPdf').addEventListener('click', ()=>{
