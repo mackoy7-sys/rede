@@ -458,7 +458,7 @@ function render(){
   const exibir = userLL ? rows.slice(0, 10) : rows; // top-10 só na busca por CEP
   lastRows = exibir;
   const html = exibir.map((r, idx) => {
-    const nPl = Object.keys(r.pl).length; // coluna Planos = TODOS os planos do prestador (independe da praça filtrada)
+    const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
     const plCell = `<td><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
     const cells = visiveis.map(s => {
       const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
@@ -526,8 +526,8 @@ $('tbody').addEventListener('toggle', e => {
   const lista = det.querySelector('.pllist');
   if (lista.childElementCount) return;
   const r = lastRows[+det.dataset.i];
-  lista.innerHTML = DATA.plans.filter(p => r.pl[p.k])
-    .map(p => `<div><b>${p.op}</b> · ${p.n}</div>`).join('');
+  lista.innerHTML = lastPlans.filter(pk => r.pl[pk])
+    .map(pk => `<div><b>${PLAN_OP[pk]}</b> · ${PLAN_NAME[pk]}</div>`).join('');
 }, true);
 
 $('btnPdf').addEventListener('click', ()=>{
