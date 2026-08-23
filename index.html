@@ -120,42 +120,6 @@
     .rodape-tabela{border-top:1px solid #ccc;font-size:9px;}
   }
   @media (max-width:700px){ header h1{font-size:17px;} .wrap{padding:14px 12px 40px;} }
-
-  /* ============ CELULAR ============
-     A tabela pede min-width:980px; abaixo de 760px cada linha vira um cartão,
-     com o nome no topo e as demais colunas como "rótulo → valor". Os rótulos
-     saem do data-lbl que o render() põe em cada célula (o número de colunas
-     de serviço varia com os filtros, então nth-child não serviria). */
-  @media(max-width:760px){
-    .tblwrap{overflow-x:visible}
-    table{min-width:0;display:block;font-size:13px}
-    thead{display:none}
-    tbody{display:block}
-    tbody tr{
-      display:block;background:#fff;border:1px solid #E3EAF5;border-radius:12px;
-      padding:10px 12px;margin-bottom:10px;
-    }
-    tbody td{
-      display:flex;align-items:center;justify-content:space-between;gap:12px;
-      text-align:right;padding:6px 0;border:0;line-height:1.35;
-    }
-    tbody td:first-child{
-      display:block;text-align:left;padding:0 0 7px;margin-bottom:4px;
-      border-bottom:1px solid #EDF2F7;
-    }
-    tbody td[data-lbl]::before{
-      content:attr(data-lbl);flex:0 0 auto;text-align:left;font-size:10.5px;
-      font-weight:700;color:#5B6B82;text-transform:uppercase;letter-spacing:.4px;
-    }
-    tbody td .nome{font-size:14px}
-    #btnMais{width:100%}
-  }
-
-  .btn-mais{
-    display:block;margin:14px auto 4px;padding:12px 26px;border:1px solid var(--azul);
-    border-radius:10px;background:#fff;color:var(--azul);font-size:14px;font-weight:600;cursor:pointer;
-  }
-  .btn-mais:hover{background:var(--azul);color:#fff}
 </style>
 </head>
 <body>
@@ -255,8 +219,7 @@
         </thead>
         <tbody id="tbody"></tbody>
       </table>
-      <button id="btnMais" class="btn-mais" style="display:none"></button>
-<div id="vazio">Nenhum prestador encontrado com os filtros selecionados.</div>
+      <div class="vazio" id="vazio">Nenhum prestador encontrado com os filtros selecionados.</div>
     </div>
     <div class="rodape-tabela">
       <div class="legenda">
@@ -314,7 +277,9 @@ function popularPlanos(){
   fPl.innerHTML = '<option value="">Todos os planos</option>';
   const ops = [...new Set(DATA.plans.map(p=>p.op))].filter(o => !op || o===op);
   ops.forEach(o => {
-    const itens = DATA.plans.filter(p => p.op===o && (!disp || disp.has(p.k)) && (!ppoAtivo || isPPO(p)));
+    // plano já selecionado permanece listado mesmo fora da praça (consulta de abrangência:
+    // ex. Smart Prime + cidade Balneário mostra onde o beneficiário é atendido em viagem)
+    const itens = DATA.plans.filter(p => p.op===o && ((!disp || disp.has(p.k)) && (!ppoAtivo || isPPO(p)) || p.k===atual));
     if (!itens.length) return;
     const grp = document.createElement('optgroup'); grp.label = o;
     itens.forEach(p => grp.appendChild(new Option(p.n, p.k)));
@@ -452,59 +417,6 @@ chips.forEach(c => c.addEventListener('click', ()=>{
 }));
 function svcsVisiveis(){ return svcAtivos===0 ? SVCS : SVCS.filter(s => svcAtivos & s.bit); }
 
-
-const REDE_LOTE = 80;   // linhas por rodada de pintura
-let _pend = [];
-
-function linhaHTML(r, idx, plans, visiveis, distMap){
-  const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
-  const plCell = `<td data-lbl="Planos"><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
-  const cells = visiveis.map(s => {
-    const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
-    if (!tem.length) return `<td data-lbl="${s.nome}"><span class="chk none">—</span></td>`;
-    const cobre = plans.filter(pk => r.pl[pk]);
-    const total = tem.length === cobre.length;
-    return `<td data-lbl="${s.nome}"><span class="chk ${total?'full':'part'}" data-i="${idx}" data-svc="${s.bit}" title="Clique para ver os planos">${total?'✓':'◐'}</span></td>`;
-  }).join('');
-  const badge = r.re==='Própria' ? '<span class="badge propria">Própria</span>' : '<span class="badge cred">Credenciada</span>';
-  return `<tr>
-      <td><div class="nome">${r.no}</div><div class="end">${r.en}${r.ba?' — '+r.ba:''}</div>${r.te?`<div class="tel">☎ ${r.te}</div>`:''}</td>
-      <td class="cidade-uf" data-lbl="Cidade">${r.ci} / ${r.uf}${distMap ? `<br><span class="dist">${(d=>d<10?d.toFixed(1).replace('.',','):Math.round(d))(distMap.get(r))} km${r.ap?' (aprox.)':''}</span>` : ''}</td>
-      <td data-lbl="Rede">${badge}</td>${plCell}${cells}</tr>`;
-}
-
-let _ctx = null;
-
-// o PDF sai do DOM: sem completar a pintura, o vendedor levaria só o 1º lote
-function pintaTudo(){
-  if (!_ctx) return true;
-  const faltam = _pend.length - lastRows.length;
-  if (faltam > 1500 &&
-      !confirm('Este PDF terá ' + _pend.length.toLocaleString('pt-BR') +
-               ' prestadores e pode demorar para montar.\n\nDica: filtre por estado, ' +
-               'cidade ou plano para um PDF mais útil.\n\nGerar assim mesmo?')) return false;
-  while (lastRows.length < _pend.length) pintaLote(_ctx.plans, _ctx.visiveis, _ctx.distMap);
-  return true;
-}
-
-function pintaLote(plans, visiveis, distMap){
-  _ctx = {plans: plans, visiveis: visiveis, distMap: distMap};
-  const ini = lastRows.length;
-  const fatia = _pend.slice(ini, ini + REDE_LOTE);
-  if (fatia.length){
-    const html = fatia.map((r, k) => linhaHTML(r, ini + k, plans, visiveis, distMap)).join('');
-    $('tbody').insertAdjacentHTML('beforeend', html);
-    fatia.forEach(r => lastRows.push(r));
-  }
-  const faltam = _pend.length - lastRows.length;
-  const btn = $('btnMais');
-  btn.style.display = faltam > 0 ? '' : 'none';
-  btn.textContent = faltam > 0
-    ? `Mostrar mais ${Math.min(REDE_LOTE, faltam).toLocaleString('pt-BR')} (faltam ${faltam.toLocaleString('pt-BR')})`
-    : '';
-  btn.onclick = () => pintaLote(plans, visiveis, distMap);
-}
-
 function render(){
   const uf=fUf.value, ci=fCi.value, op=fOp.value, busca=norm(fNo.value.trim());
   const plans = planosSelecionados();
@@ -543,30 +455,26 @@ function render(){
   rows.forEach(r => visiveis.forEach(s => {
     if (plans.some(pk => (r.pl[pk]||0) & s.bit)) cont[s.id]++;
   }));
-  // Pintar as 12 mil linhas de uma vez travava o navegador (pior no celular):
-  // guardamos a lista e vamos pintando de REDE_LOTE em REDE_LOTE.
   const exibir = userLL ? rows.slice(0, 10) : rows; // top-10 só na busca por CEP
-  _pend = exibir;
-  lastRows = [];
-  $('tbody').innerHTML = '';
-  pintaLote(plans, visiveis, distMap);
-  const html = [].map((r, idx) => {
+  lastRows = exibir;
+  const html = exibir.map((r, idx) => {
     const nPl = plans.reduce((n,pk) => n + (r.pl[pk] ? 1 : 0), 0);
-    const plCell = `<td data-lbl="Planos"><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
+    const plCell = `<td><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
     const cells = visiveis.map(s => {
       const tem = plans.filter(pk => (r.pl[pk]||0) & s.bit);
-      if (!tem.length) return `<td data-lbl="${s.nome}"><span class="chk none">—</span></td>`;
+      if (!tem.length) return '<td><span class="chk none">—</span></td>';
       const cobre = plans.filter(pk => r.pl[pk]); // planos em que o prestador existe
       const total = tem.length === cobre.length;
-      return `<td data-lbl="${s.nome}"><span class="chk ${total?'full':'part'}" data-i="${idx}" data-svc="${s.bit}" title="Clique para ver os planos">${total?'✓':'◐'}</span></td>`;
+      return `<td><span class="chk ${total?'full':'part'}" data-i="${idx}" data-svc="${s.bit}" title="Clique para ver os planos">${total?'✓':'◐'}</span></td>`;
     }).join('');
     const badge = r.re==='Própria' ? '<span class="badge propria">Própria</span>' : '<span class="badge cred">Credenciada</span>';
     return `<tr>
       <td><div class="nome">${r.no}</div><div class="end">${r.en}${r.ba?' — '+r.ba:''}</div>${r.te?`<div class="tel">☎ ${r.te}</div>`:''}</td>
-      <td class="cidade-uf" data-lbl="Cidade">${r.ci} / ${r.uf}${distMap ? `<br><span class="dist">${(d=>d<10?d.toFixed(1).replace('.',','):Math.round(d))(distMap.get(r))} km${r.ap?' (aprox.)':''}</span>` : ''}</td>
-      <td data-lbl="Rede">${badge}</td>${plCell}${cells}</tr>`;
+      <td class="cidade-uf">${r.ci} / ${r.uf}${distMap ? `<br><span class="dist">${(d=>d<10?d.toFixed(1).replace('.',','):Math.round(d))(distMap.get(r))} km${r.ap?' (aprox.)':''}</span>` : ''}</td>
+      <td>${badge}</td>${plCell}${cells}</tr>`;
   }).join('');
 
+  $('tbody').innerHTML = html;
   $('vazio').style.display = rows.length ? 'none' : 'block';
   $('cTotal').textContent = rows.length.toLocaleString('pt-BR');
   SVCS.forEach(s => $('c'+s.id).textContent = cont[s.id].toLocaleString('pt-BR'));
@@ -623,7 +531,6 @@ $('tbody').addEventListener('toggle', e => {
 }, true);
 
 $('btnPdf').addEventListener('click', ()=>{
-  if (!pintaTudo()) return;
   const parts = [];
   if (fOp.value) parts.push('Operadora: ' + fOp.value);
   if (fPl.value) parts.push('Plano: ' + fPl.options[fPl.selectedIndex].text);
