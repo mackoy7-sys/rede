@@ -458,14 +458,20 @@ function render(){
     (!busca || norm(r.no).includes(busca)) &&
     plans.some(pk => (r.pl[pk]||0) & maskAtivo)
   );
-  let distMap = null;
+  let distMap = null, raioUsado = 15;
   if (userLL){
-    const perto = [];
-    rows.forEach(r => {
-      if (!r.ll) return;
-      const d = haversine(userLL, r.ll);
-      if (d <= 15) perto.push([r, d]);
-    });
+    // sem nenhuma rede em 15 km → amplia automaticamente p/ 30 km
+    let perto = [];
+    for (const raio of [15, 30]){
+      perto = [];
+      rows.forEach(r => {
+        if (!r.ll) return;
+        const d = haversine(userLL, r.ll);
+        if (d <= raio) perto.push([r, d]);
+      });
+      raioUsado = raio;
+      if (perto.length) break;
+    }
     perto.sort((a,b) => a[1]-b[1]);
     rows = perto.map(x => x[0]);
     distMap = new Map(perto);
@@ -499,9 +505,10 @@ function render(){
   $('vazio').style.display = rows.length ? 'none' : 'block';
   $('cTotal').textContent = rows.length.toLocaleString('pt-BR');
   SVCS.forEach(s => $('c'+s.id).textContent = cont[s.id].toLocaleString('pt-BR'));
+  const rotRaio = raioUsado + ' km do CEP' + (raioUsado === 30 ? ' (raio ampliado — nenhuma rede em 15 km)' : '');
   $('contagem').textContent = (userLL && rows.length > 10)
-    ? 'mostrando os 10 mais próximos de ' + rows.length.toLocaleString('pt-BR') + ' prestadores no raio de 15 km do CEP — refine os filtros p/ ver outros'
-    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' · raio de 15 km do CEP' : '');
+    ? 'mostrando os 10 mais próximos de ' + rows.length.toLocaleString('pt-BR') + ' prestadores no raio de ' + rotRaio + ' — refine os filtros p/ ver outros'
+    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' · raio de ' + rotRaio : '');
 }
 
 fUf.addEventListener('change', ()=>{ popularCidades(); popularPlanos(); render(); });
