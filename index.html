@@ -327,30 +327,84 @@ function norm(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
 // --- busca por CEP (raio 15 km) ---
 const fCep = $('fCep'), cepStatus = $('cepStatus');
 let userLL = null;
+// o que se sabe do CEP mesmo quando não deu para achar a coordenada — a tela vazia usa isso
+// para dizer de que cidade é o CEP em vez de só sumir com a tabela
+let cepInfo = null; // {cep, cidade, uf, bairro}
+let raioAtual = 15; // raio efetivamente aplicado no último render (15 ou 30 km)
 function haversine(a, b){
   const R = 6371, rad = x => x*Math.PI/180;
   const dLat = rad(b[0]-a[0]), dLng = rad(b[1]-a[1]);
   const s = Math.sin(dLat/2)**2 + Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.sqrt(s));
 }
+function cepFmt(c){ return (c||'').replace(/(\d{5})(\d{3})/, '$1-$2'); }
+// faixas oficiais de CEP por UF (5 primeiros dígitos). Rede de segurança: se as APIs de CEP
+// estiverem bloqueadas (acontece em rede corporativa), ainda dá para dizer de que estado é o
+// CEP, em vez de devolver só "CEP não localizado".
+const CEP_UF = [
+  [1000,19999,'SP'], [20000,28999,'RJ'], [29000,29999,'ES'], [30000,39999,'MG'],
+  [40000,48999,'BA'], [49000,49999,'SE'], [50000,56999,'PE'], [57000,57999,'AL'],
+  [58000,58999,'PB'], [59000,59999,'RN'], [60000,63999,'CE'], [64000,64999,'PI'],
+  [65000,65999,'MA'], [66000,68899,'PA'], [68900,68999,'AP'], [69000,69299,'AM'],
+  [69300,69399,'RR'], [69400,69899,'AM'], [69900,69999,'AC'], [70000,72799,'DF'],
+  [72800,72999,'GO'], [73000,73699,'DF'], [73700,76799,'GO'], [76800,76999,'RO'],
+  [77000,77999,'TO'], [78000,78899,'MT'], [78900,78999,'RO'], [79000,79999,'MS'],
+  [80000,87999,'PR'], [88000,89999,'SC'], [90000,99999,'RS'],
+];
+function ufDoCep(cep){
+  const n = +cep.slice(0,5);
+  const f = CEP_UF.find(x => n >= x[0] && n <= x[1]);
+  return f ? f[2] : '';
+}
 let cepTimer = null, cepSeq = 0;
 fCep.addEventListener('input', ()=>{
   const cep = fCep.value.replace(/\D/g,'');
   clearTimeout(cepTimer);
   if (cep.length < 8){
-    if (userLL){ userLL = null; render(); }
+    if (userLL || cepInfo){ userLL = null; cepInfo = null; render(); }
     cepStatus.textContent = cep.length ? 'digite os 8 dígitos do CEP' : '';
+    cepStatus.title = '';
     return;
   }
   cepStatus.textContent = 'localizando CEP…';
+  cepStatus.title = '';
   cepTimer = setTimeout(()=>localizaCep(cep), 350);
 });
 function mediaPts(pts){
   return [pts.reduce((s,x)=>s+x.ll[0],0)/pts.length, pts.reduce((s,x)=>s+x.ll[1],0)/pts.length];
 }
+function centroCidade(cidade, uf){
+  if (!cidade) return null;
+  const pts = DATA.rows.filter(x => x.ll && (!uf || x.uf===uf) && norm(x.ci)===norm(cidade));
+  return pts.length ? mediaPts(pts) : null;
+}
+// O geocoder devolve o primeiro palpite dele. Sem conferir o estado, uma rua de nome parecido em
+// outra UF passa como se fosse o endereço do CEP — e aí o raio de 15 km não acha nada e a tela
+// fica vazia sem explicação. Busca estruturada (rua/cidade/estado) + descarte do que não bate.
+async function geocodaRua(via){
+  const uf = via.uf || '';
+  const p = new URLSearchParams({
+    format:'json', limit:'5', countrycodes:'br', addressdetails:'1',
+    street: via.logradouro, city: via.localidade || '', state: uf,
+  });
+  const rn = await fetch('https://nominatim.openstreetmap.org/search?' + p.toString());
+  if (!rn.ok) return null;
+  const jn = await rn.json();
+  const centro = centroCidade(via.localidade || '', uf);
+  for (const c of jn){
+    if (!c.lat) continue;
+    const ll = [+c.lat, +c.lon];
+    const iso = (c.address || {})['ISO3166-2-lvl4'] || '';
+    if (uf && iso && iso !== 'BR-' + uf) continue;              // estado errado: descarta
+    if (!iso && centro && haversine(ll, centro) > 60) continue; // sem UF no retorno: confere por distância
+    return ll;
+  }
+  return null;
+}
 async function localizaCep(cep){
   const seq = ++cepSeq;
   let ll = null, rot = '';
+  const info = {cep: cep, cidade: '', uf: ufDoCep(cep), bairro: ''};
   // 1) ViaCEP → geocodifica a RUA no OpenStreetMap (nível de rua, o mais confiável;
   //    as APIs de CEP às vezes devolvem o ponto genérico do centro da cidade)
   let via = null;
@@ -358,12 +412,11 @@ async function localizaCep(cep){
     const r = await fetch('https://viacep.com.br/ws/'+cep+'/json/');
     if (r.ok){ const j = await r.json(); if (!j.erro) via = j; }
   }catch(e){}
+  if (via){ info.cidade = via.localidade || ''; info.uf = via.uf || info.uf; info.bairro = via.bairro || ''; }
   if (via && via.logradouro){
     try{
-      const q = encodeURIComponent(via.logradouro+', '+(via.localidade||'')+', '+(via.uf||'')+', Brasil');
-      const rn = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q='+q);
-      if (rn.ok){ const jn = await rn.json();
-        if (jn[0] && jn[0].lat){ ll = [+jn[0].lat, +jn[0].lon]; rot = via.logradouro+(via.bairro?', '+via.bairro:'')+', '+via.localidade+'/'+via.uf; } }
+      ll = await geocodaRua(via);
+      if (ll) rot = via.logradouro+(via.bairro?', '+via.bairro:'')+', '+via.localidade+'/'+via.uf;
     }catch(e){}
   }
   // 2) AwesomeAPI: ponto do CEP
@@ -371,6 +424,7 @@ async function localizaCep(cep){
     try{
       const r = await fetch('https://cep.awesomeapi.com.br/json/'+cep);
       if (r.ok){ const j = await r.json();
+        if (j.city){ info.cidade = info.cidade || j.city; info.uf = info.uf || j.state || ''; info.bairro = info.bairro || (j.district||''); }
         if (j.lat && j.lng){ ll = [+j.lat, +j.lng]; rot = (j.district?j.district+', ':'')+(j.city||'')+'/'+(j.state||''); } }
     }catch(e){}
   }
@@ -379,25 +433,36 @@ async function localizaCep(cep){
     try{
       const r = await fetch('https://brasilapi.com.br/api/cep/v2/'+cep);
       if (r.ok){ const j = await r.json();
+        if (j.city){ info.cidade = info.cidade || j.city; info.uf = info.uf || j.state || ''; info.bairro = info.bairro || (j.neighborhood||''); }
         const c = ((j.location||{}).coordinates)||{};
         if (c.latitude && c.longitude){ ll = [+c.latitude, +c.longitude]; rot = (j.neighborhood?j.neighborhood+', ':'')+(j.city||'')+'/'+(j.state||''); } }
     }catch(e){}
   }
   // 4) média dos prestadores precisos do mesmo BAIRRO / 5) média da cidade
-  if (!ll && via){
-    const cidade = via.localidade||'', uf = via.uf||'', bairro = via.bairro||'';
+  if (!ll && info.cidade){
+    const cidade = info.cidade, uf = info.uf, bairro = info.bairro;
     if (bairro){
       const pts = DATA.rows.filter(x => x.ll && !x.ap && x.uf===uf && norm(x.ci)===norm(cidade) && norm(x.ba||'')===norm(bairro));
       if (pts.length){ ll = mediaPts(pts); rot = bairro+', '+cidade+'/'+uf+' (bairro aprox.)'; }
     }
     if (!ll){
-      const pts = DATA.rows.filter(x => x.ll && x.uf===uf && norm(x.ci)===norm(cidade));
-      if (pts.length){ ll = mediaPts(pts); rot = cidade+'/'+uf+' (centro aprox.)'; }
+      const c = centroCidade(cidade, uf);
+      if (c){ ll = c; rot = cidade+'/'+uf+' (centro aprox.)'; }
     }
   }
   if (seq !== cepSeq) return; // usuário já digitou outro CEP
-  if (ll){ userLL = ll; cepStatus.textContent = '📍 '+rot+' — mostrando raio de 15 km'; }
-  else { userLL = null; cepStatus.textContent = 'CEP não localizado'; }
+  cepInfo = info;
+  if (ll){
+    userLL = ll;
+    cepStatus.textContent = '📍 '+rot+' — raio de 15 km';
+  }else{
+    userLL = null;
+    cepStatus.textContent = info.cidade
+      ? '📍 CEP em '+info.cidade+'/'+info.uf+' — sem ponto no mapa; filtre por Estado/Cidade'
+      : (info.uf ? 'CEP não localizado (consulta externa indisponível) — é um CEP de '+info.uf
+                 : 'CEP não localizado');
+  }
+  cepStatus.title = cepStatus.textContent;
   render();
 }
 
@@ -438,6 +503,46 @@ chips.forEach(c => c.addEventListener('click', ()=>{
 }));
 function svcsVisiveis(){ return svcAtivos===0 ? SVCS : SVCS.filter(s => svcAtivos & s.bit); }
 
+// A queixa mais comum é "não aparece atendimento para o CEP X". Quase nunca é falta de rede na
+// base: é filtro empilhado (plano regional + CEP de outra praça) ou o CEP ser de uma cidade
+// diferente da que se imagina. Por isso cada filtro vira um critério isolado — assim a tela vazia
+// consegue dizer QUAL deles zerou a lista, e a que distância está o prestador mais próximo.
+function explicaVazio(criterios, criteriosSemCep, raio){
+  const bloco = [];
+  bloco.push('<div style="font-size:15px;font-weight:800;color:var(--azul);margin-bottom:8px">Nenhum prestador com esta combinação de filtros.</div>');
+  if (cepInfo && cepInfo.cidade)
+    bloco.push('<div style="margin-bottom:6px">O CEP <b>'+cepFmt(cepInfo.cep)+'</b> fica em <b>'+cepInfo.cidade+'/'+cepInfo.uf+'</b>.</div>');
+  if (cepInfo && cepInfo.cidade && fCi.value && norm(fCi.value) !== norm(cepInfo.cidade))
+    bloco.push('<div style="margin-bottom:6px;color:var(--laranja);font-weight:700">⚠ O filtro <b>Cidade</b> está em '+fCi.value+', mas o CEP é de '+cepInfo.cidade+' — os dois juntos dificilmente devolvem algo.</div>');
+
+  const ativos = criterios.filter(c => c.on);
+  if (ativos.length){
+    // "culpado": soltando só ele, a lista volta a ter resultado
+    const culpados = ativos.filter(c => {
+      const outros = criterios.filter(x => x !== c);
+      return DATA.rows.some(r => outros.every(x => x.ok(r)));
+    });
+    bloco.push(culpados.length
+      ? '<div style="margin-bottom:6px">Basta soltar <b>'+culpados.map(c=>c.rot).join('</b> ou <b>')+'</b> para voltar a ter resultado.</div>'
+      : '<div style="margin-bottom:6px">Filtros ativos: <b>'+ativos.map(c=>c.rot).join('</b> · <b>')+'</b>. Eles só zeram a lista <b>combinados</b> — nenhum sozinho é o responsável.</div>');
+  }
+
+  if (userLL){
+    const fora = DATA.rows.filter(r => r.ll && criteriosSemCep.every(c => c.ok(r)))
+                          .map(r => [r, haversine(userLL, r.ll)])
+                          .sort((a,b) => a[1]-b[1]).slice(0, 3);
+    if (fora.length){
+      bloco.push('<div style="margin-top:10px">Com os demais filtros, o mais próximo do CEP está fora do raio de '+raio+' km:</div>');
+      bloco.push('<ul style="margin:4px 0 0 18px">'+fora.map(function(x){
+        return '<li><b>'+x[0].no+'</b> — '+x[0].ci+'/'+x[0].uf+' · <b>'+Math.round(x[1])+' km</b></li>';
+      }).join('')+'</ul>');
+    }else{
+      bloco.push('<div style="margin-top:10px">Não há prestador na base que atenda aos demais filtros, em nenhuma distância.</div>');
+    }
+  }
+  return '<div style="max-width:720px;margin:0 auto;text-align:left;line-height:1.55">'+bloco.join('')+'</div>';
+}
+
 function render(){
   const uf=fUf.value, ci=fCi.value, op=fOp.value, busca=norm(fNo.value.trim());
   const plans = planosSelecionados();
@@ -451,13 +556,27 @@ function render(){
     $('card'+s.id).classList.toggle('oculto', !vis);
   });
 
-  let rows = DATA.rows.filter(r =>
-    (!redeSel || r.re===redeSel) &&
-    (!uf || r.uf===uf) &&
-    (!ci || r.ci===ci) &&
-    (!busca || norm(r.no).includes(busca)) &&
-    plans.some(pk => (r.pl[pk]||0) & maskAtivo)
-  );
+  // um objeto por filtro (mesmo recorte de antes, só que nomeado) — ver explicaVazio()
+  const rotPlano = fPl.value ? 'Plano "'+fPl.options[fPl.selectedIndex].text+'"'
+                 : ppoAtivo  ? 'Produto PPO'
+                 : op        ? 'Operadora '+op
+                 : (ci || uf)? 'Planos comercializados em '+(ci || uf)
+                 : '';
+  const criterios = [
+    {rot:'Rede "'+redeSel+'"',          on:!!redeSel, ok:r => !redeSel || r.re===redeSel},
+    {rot:'Estado '+uf,                  on:!!uf,      ok:r => !uf || r.uf===uf},
+    {rot:'Cidade '+ci,                  on:!!ci,      ok:r => !ci || r.ci===ci},
+    {rot:'Nome "'+fNo.value.trim()+'"', on:!!busca,   ok:r => !busca || norm(r.no).includes(busca)},
+    {rot:rotPlano,                      on:!!rotPlano,ok:r => plans.some(pk => r.pl[pk])},
+    {rot:'Tipo de atendimento: '+visiveis.map(s=>s.nome).join(', '),
+                                        on:svcAtivos!==0,
+     // com "Todos" ligado a máscara é 31 e este critério repete o de plano; deixá-lo inerte aí
+     // faz o diagnóstico da tela vazia apontar o filtro de plano, que é o que de fato pesou
+                                        ok:r => svcAtivos===0 || plans.some(pk => (r.pl[pk]||0) & maskAtivo)},
+  ];
+  let rows = DATA.rows.filter(r => criterios.every(c => c.ok(r)));
+
+  const criteriosSemCep = criterios.slice();
   let distMap = null, raioUsado = 15;
   if (userLL){
     // sem nenhuma rede em 15 km → amplia automaticamente p/ 30 km
@@ -475,7 +594,10 @@ function render(){
     perto.sort((a,b) => a[1]-b[1]);
     rows = perto.map(x => x[0]);
     distMap = new Map(perto);
+    criterios.push({rot:'CEP '+cepFmt(cepInfo && cepInfo.cep)+' (raio de '+raioUsado+' km)', on:true,
+                    ok:r => !!r.ll && haversine(userLL, r.ll) <= raioUsado});
   }
+  raioAtual = raioUsado;
 
   lastPlans = plans;
   const cont = {Int:0,PS:0,Mat:0,CC:0,Lab:0};
@@ -502,13 +624,17 @@ function render(){
   }).join('');
 
   $('tbody').innerHTML = html;
-  $('vazio').style.display = rows.length ? 'none' : 'block';
+  const vazio = $('vazio');
+  vazio.style.display = rows.length ? 'none' : 'block';
+  if (!rows.length) vazio.innerHTML = explicaVazio(criterios, criteriosSemCep, raioUsado);
   $('cTotal').textContent = rows.length.toLocaleString('pt-BR');
   SVCS.forEach(s => $('c'+s.id).textContent = cont[s.id].toLocaleString('pt-BR'));
   const rotRaio = raioUsado + ' km do CEP' + (raioUsado === 30 ? ' (raio ampliado — nenhuma rede em 15 km)' : '');
-  $('contagem').textContent = (userLL && rows.length > 10)
+  const conflito = (cepInfo && cepInfo.cidade && ci && norm(ci) !== norm(cepInfo.cidade))
+    ? ' · ⚠ filtro Cidade (' + ci + ') diferente da cidade do CEP (' + cepInfo.cidade + ')' : '';
+  $('contagem').textContent = ((userLL && rows.length > 10)
     ? 'mostrando os 10 mais próximos de ' + rows.length.toLocaleString('pt-BR') + ' prestadores no raio de ' + rotRaio + ' — refine os filtros p/ ver outros'
-    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' · raio de ' + rotRaio : '');
+    : rows.length.toLocaleString('pt-BR') + ' prestador(es) exibido(s)' + (userLL ? ' · raio de ' + rotRaio : '')) + conflito;
 }
 
 fUf.addEventListener('change', ()=>{ popularCidades(); popularPlanos(); render(); });
@@ -518,7 +644,7 @@ fPl.addEventListener('change', render);
 fNo.addEventListener('input', render);
 $('btnLimpar').addEventListener('click', ()=>{
   fOp.value=''; fPl.value=''; fUf.value=''; fNo.value='';
-  fCep.value=''; userLL=null; cepStatus.textContent='';
+  fCep.value=''; userLL=null; cepInfo=null; cepStatus.textContent=''; cepStatus.title='';
   fPlB.value=''; fUfB.value=''; fCiB.value='';
   ppoAtivo=false; chipPPO.classList.remove('on');
   svcAtivos=0; syncChips();
@@ -565,7 +691,7 @@ $('btnPdf').addEventListener('click', ()=>{
   if (fUf.value) parts.push('Estado: ' + fUf.value);
   if (fCi.value) parts.push('Cidade: ' + fCi.value);
   if (fNo.value.trim()) parts.push('Nome: "' + fNo.value.trim() + '"');
-  if (userLL) parts.push('CEP ' + fCep.value.replace(/\D/g,'').replace(/(\d{5})(\d{3})/,'$1-$2') + ' (raio 15 km, mais próximos primeiro)');
+  if (userLL) parts.push('CEP ' + cepFmt(fCep.value.replace(/\D/g,'')) + (cepInfo && cepInfo.cidade ? ' — ' + cepInfo.cidade + '/' + cepInfo.uf : '') + ' (raio ' + raioAtual + ' km, mais próximos primeiro)');
   if (ppoAtivo) parts.push('Produto: PPO (Advance/Premium/Infinity)');
   if (redeSel) parts.push('Rede: ' + redeSel);
   if (svcAtivos) parts.push('Tipo: ' + SVCS.filter(s => svcAtivos & s.bit).map(s => s.nome).join(', '));
