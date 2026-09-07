@@ -64,9 +64,14 @@
   .pldet summary{cursor:pointer;list-style:none;display:inline-block;background:#EAF3FF;color:var(--azul2);font-weight:700;font-size:10px;padding:2px 8px;border-radius:14px;white-space:nowrap;user-select:none;}
   .pldet summary::-webkit-details-marker{display:none;}
   .pldet[open] summary{background:var(--azul2);color:#fff;}
-  .pllist{text-align:left;font-size:11.5px;color:#3A4A5C;margin-top:6px;max-width:240px;}
-  .pllist div{padding:2px 0;border-bottom:1px dashed #E4EBF3;}
+  .pllist{text-align:left;font-size:11px;color:#3A4A5C;margin-top:6px;max-width:340px;}
+  .pllist div{height:24px;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px dashed #E4EBF3;}
   .pllist b{color:var(--azul);}
+  tr.pl-open td{vertical-align:top;}
+  .pl-stack{margin-top:21px;}
+  .pl-stack .pl-ic{height:24px;display:flex;align-items:center;justify-content:center;border-bottom:1px dashed #E4EBF3;}
+  .pl-stack .chk{width:16px;height:16px;font-size:9px;cursor:default;}
+  .pl-stack .chk:hover{outline:none;}
   .chk{display:inline-flex;width:20px;height:20px;border-radius:50%;align-items:center;justify-content:center;font-size:11px;font-weight:800;}
   .chk.full{background:#E1F5EA;color:var(--verde);cursor:pointer;}
   .chk.part{background:#FFF1E2;color:var(--laranja);cursor:pointer;}
@@ -246,7 +251,7 @@ const SVCS = [
 ];
 const PLAN_NAME = {}, PLAN_OP = {};
 DATA.plans.forEach(p => { PLAN_NAME[p.k] = p.n; PLAN_OP[p.k] = p.op; });
-let lastRows = [], lastPlans = [];
+let lastRows = [], lastPlans = [], lastVisiveis = [];
 
 // nº de prestadores de cada plano por cidade — p/ separar rede LOCAL de rede própria de
 // passagem (planos regionais listam a rede própria nacional inteira como abrangência)
@@ -483,7 +488,7 @@ function render(){
     if (plans.some(pk => (r.pl[pk]||0) & s.bit)) cont[s.id]++;
   }));
   const exibir = userLL ? rows.slice(0, 10) : rows; // top-10 só na busca por CEP
-  lastRows = exibir;
+  lastRows = exibir; lastVisiveis = visiveis;
   const html = exibir.map((r, idx) => {
     const nPl = planosDoPrestador(r).length;
     const plCell = `<td><details class="pldet" data-i="${idx}"><summary>${nPl} plano${nPl>1?'s':''}</summary><div class="pllist"></div></details></td>`;
@@ -550,12 +555,31 @@ document.querySelector('.tabela-scroll').addEventListener('scroll', fecharPop);
 
 $('tbody').addEventListener('toggle', e => {
   const det = e.target;
-  if (!det.classList || !det.classList.contains('pldet') || !det.open) return;
-  const lista = det.querySelector('.pllist');
-  if (lista.childElementCount) return;
+  if (!det.classList || !det.classList.contains('pldet')) return;
+  const tr = det.closest('tr');
   const r = lastRows[+det.dataset.i];
-  lista.innerHTML = planosDoPrestador(r)
-    .map(p => `<div><b>${p.op}</b> · ${p.n}</div>`).join('');
+  const svcTds = [...tr.children].slice(4);
+  if (det.open){
+    tr.classList.add('pl-open');
+    const planos = planosDoPrestador(r);
+    det.querySelector('.pllist').innerHTML = planos
+      .map(p => `<div title="${p.op} · ${p.n}"><b>${p.op}</b> · ${p.n}</div>`).join('');
+    // pilha de ✓/— por plano, alinhada linha a linha com a lista, em cada coluna de tipo
+    svcTds.forEach((td, i) => {
+      const s = lastVisiveis[i];
+      if (!s) return;
+      if (td.dataset.orig === undefined) td.dataset.orig = td.innerHTML;
+      td.innerHTML = '<div class="pl-stack">' + planos.map(p =>
+        ((r.pl[p.k]||0) & s.bit)
+          ? '<div class="pl-ic"><span class="chk full">✓</span></div>'
+          : '<div class="pl-ic"><span class="chk none">—</span></div>').join('') + '</div>';
+    });
+  } else {
+    tr.classList.remove('pl-open');
+    svcTds.forEach(td => {
+      if (td.dataset.orig !== undefined){ td.innerHTML = td.dataset.orig; delete td.dataset.orig; }
+    });
+  }
 }, true);
 
 $('btnPdf').addEventListener('click', ()=>{
